@@ -600,8 +600,13 @@ function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter
     if (!empty($hasnodes)) {
       $path  = str_replace('%tid', $tid, $pathpattern);
       $omited = '';
-      if (in_array($tid, $omit)) {
-        $omited = TRUE;
+      if (!empty($omit)) {
+        if (in_array($tid, $omit)) {
+          $omited = TRUE;
+        }
+      }
+      else {
+        $omited = FALSE;
       }
       if ($omited == TRUE) {
         $tree[$termname]['link']['hidden'] = '1';
@@ -638,7 +643,12 @@ function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter
       $allchildren = taxonomy_get_children($tid);
       foreach ($allchildren as $ctid) {
         $child_has_node = term_has_nodes($ctid);
-        $child_is_omited = in_array($ctid->tid, $omit);
+        if (!empty($omit)) {
+          $child_is_omited = in_array($ctid->tid, $omit);
+        }
+        else {
+          $child_is_omited = FALSE;
+        }
         if (!empty($child_has_node) && $child_is_omited == FALSE) {
           $child_with_node_array[] = $ctid->tid;
         }
