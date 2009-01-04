@@ -53,31 +53,20 @@ function taxonomyblocks_menu() {
 function taxonomy_blocks_list() {
   $header = array(t('Block title'), t('Actions'));
   $rows    = array();
-  // Predefined blocks that cannot be deleted.
-
-  // Added blocks
-  $x = 0;
   $result = db_query("SELECT tb_id, block_title, custom FROM {tb_added_list}");
   while ($tb_block = db_fetch_object($result)) {
-    $tb_array[$x]['title'] = $tb_block->block_title;
-    $tb_array[$x]['tb_id'] = $tb_block->tb_id;
-    $x++;
-  }
-  
-  foreach ($tb_array as $tb) {
     $row     = array();
     $links   = array();
-    $row[]   = $tb['title'];
-    $links[] = l(t(Configure), 'admin/settings/taxonomyblocks/configure/'. $tb['tb_id']);
-    $links[] = l(t(Reset), 'admin/settings/taxonomyblocks/reset/'. $tb['tb_id']);
-    if ($tb['tb_id'] != 0 && $tb['tb_id'] != 1) {
-      $links[] = l(t(Delete), 'admin/settings/taxonomyblocks/delete/'. $tb['tb_id']);
+    $row[]   = $tb_block->block_title;
+    $links[] = l(t('Configure'), 'admin/settings/taxonomyblocks/configure/'. $tb_block->tb_id);
+    $links[] = l(t('Reset'), 'admin/settings/taxonomyblocks/reset/'. $tb_block->tb_id);
+    if ($tb_block->tb_id != 0 && $tb_block->tb_id != 1) {
+      $links[] = l(t('Delete'), 'admin/settings/taxonomyblocks/delete/'. $tb_block->tb_id);
     }
     $row[]   = implode('&nbsp;&nbsp;&nbsp;&nbsp;', $links);
     $rows[]  = $row;
   }
-  $output  = theme('table', $header, $rows);
-
+  $output = theme('table', $header, $rows);
   return $output;
 }
 
@@ -149,6 +138,14 @@ function taxonomy_blocks_config() {
     $result = db_query("SELECT vid, name FROM {vocabulary} WHERE name = 'Forums'");
   }
   // We will later need to process this array to set defaults that were previously saved.
+  $form['tb_config_form']['vocab_options'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Omit tids'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#tree' => TRUE,
+    '#description' => t('These tids will be disabled only for this block. These settings have no affect on the actual taxonomies.'),
+  );
   while ($vocab = db_fetch_object($result)) {
     $vocab_array[] = $vocab->vid;
     //Check if vocab has been altered before checking specific defaults.
@@ -221,6 +218,7 @@ function taxonomy_blocks_config() {
       $weight_def = 0;
     }
     $tb_id_omit_def = db_result(db_query("SELECT omit_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
+    $tid_checked = explode(',', $tb_id_omit_def);
     $maintitle_def = db_result(db_query("SELECT block_title FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
     $content_types = array();
     $content_types['all'] = t('All Content Types');
@@ -271,13 +269,36 @@ function taxonomy_blocks_config() {
       '#type' => 'checkbox',
       '#default_value' => FALSE,
     );
+    $form['tb_config_form']['vocab_options']['vocab'][$vocab->vid]= array(
+      '#type' => 'fieldset',
+      '#title' => $vocab->name,
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#tree' => TRUE,
+    );
+   
+    $sub_result = db_query("SELECT tid, name FROM {term_data} WHERE vid = %d", $vocab->vid);
+    while ($term = db_fetch_object($sub_result)) {
+      $term_array[] = $term->tid;
+      if (in_array($term->tid, $tid_checked) != FALSE) {
+        $term_def = TRUE;
+      }
+      else {
+        $term_def = FALSE;
+      }
+      $form['tb_config_form']['vocab_options']['vocab'][$vocab->vid]['terms'][$term->tid] = array(
+        '#type' => 'checkbox',
+        '#title' => $term->name,
+        '#default_value' => $term_def,
+      );
+     
+    }
+    $form['tb_config_form']['vocab_options']['vocab'][$vocab->vid]['term_array']= array(
+      '#type' => 'value',
+      '#value' => $term_array,
+    ); 
+ 
   }
-  $form['tb_config_form']['omit_tids'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Tids which should be disabled'),
-    '#description' => t('Comma separated values. No spaces.'),
-    '#default_value' => $tb_id_omit_def,
-  );
   $form['tb_config_form']['reset_all'] = array(
     '#type' => 'checkbox',
     '#title' => 'Reset All',
@@ -305,6 +326,7 @@ function theme_taxonomy_blocks_config_list($form) {
   $title = db_result(db_query("SELECT block_title FROM {tb_added_list} WHERE tb_id = %d", $delta));
   $header = array(t('Enabled Vocabs'), t('Node count options'), t('Custom Title'),  t('Path Pattern'), t('Link Title Pattern'), t('Weight'), t('Reset'));
   $rows = array();
+  $output .= drupal_render($form['main_title']);
   foreach ($form['vocab_array']['#value'] as $vid) {
     $row = array();
     $row[]  = drupal_render($form['vocab'][$vid]['enable_vocab']);
@@ -322,7 +344,18 @@ function theme_taxonomy_blocks_config_list($form) {
 }
 function taxonomy_blocks_config_submit($form, $formstate) {
   $vid_array = $formstate['values']['tb_config_form']['vocab_array'];
-  $tb_id     = $formstate['values']['tb_config_form']['tb_id'];
+  if (!empty($vid_array)) {
+    foreach ($vid_array as $vid) {
+      $tid_array = $formstate['values']['tb_config_form']['vocab_options']['vocab'][$vid]['term_array'];   
+      foreach ($tid_array as $tid) {
+        if ($formstate['values']['tb_config_form']['vocab_options']['vocab'][$vid]['terms'][$tid] == TRUE) {
+          $tid_checked[] = $tid;
+        }
+      }
+      
+    }
+  }
+  $tb_id = $formstate['values']['tb_config_form']['tb_id'];
   if ($formstate['values']['tb_config_form']['vocab'][$vid]['reset'] == FALSE) {
     $maintitle = $formstate['values']['tb_config_form']['main_title'];
     db_query("UPDATE {tb_added_list} SET block_title = '%s' WHERE tb_id = %d", $maintitle, $tb_id);
@@ -360,8 +393,8 @@ function taxonomy_blocks_config_submit($form, $formstate) {
         db_query("DELETE FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid);
       }
     }
-    if (!empty($formstate['values']['tb_config_form']['omit_tids'])) {
-      $omit_tids = check_plain($formstate['values']['tb_config_form']['omit_tids']);
+    if (!empty($tid_checked)) {
+      $omit_tids = implode(',', $tid_checked);
       db_query("UPDATE {tb_added_list} SET omit_tids = '%s', custom = 1 WHERE tb_id = %d", $omit_tids, $tb_id);
     }
     if ($formstate['values']['tb_config_form']['reset_all'] == TRUE) {
