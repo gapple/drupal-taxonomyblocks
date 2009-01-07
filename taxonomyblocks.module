@@ -626,6 +626,7 @@ function taxonomy_trail_creator($pathpattern) {
 function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter = 'all', $titlepattern = NULL, $omit = NULL) {
   foreach ($tid_array as $tid) {
     $termname =  db_result(db_query("SELECT name FROM {term_data} WHERE tid = %d", $tid));
+    
     $tree[$termname]['link']['tid'] = $tid;
     $tree[$termname]['link']['path_pattern'] = $pathpattern;
     $hasnodes = term_has_nodes($tid);
@@ -675,14 +676,17 @@ function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter
     if (!empty($children)) {
       $allchildren = taxonomy_get_children($tid);
       foreach ($allchildren as $ctid) {
-        $child_has_node = term_has_nodes($ctid);
+       
+        $child_has_node = term_has_nodes($ctid->tid);
+       
         if (!empty($omit)) {
           $child_is_omited = in_array($ctid->tid, $omit);
         }
         else {
           $child_is_omited = FALSE;
         }
-        if (!empty($child_has_node) && $child_is_omited == FALSE) {
+        $child_with_node_array = array();
+        if ($child_has_node != FALSE && $child_is_omited == FALSE) {
           $child_with_node_array[] = $ctid->tid;
         }
       }
