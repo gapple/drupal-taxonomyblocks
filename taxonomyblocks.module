@@ -327,16 +327,18 @@ function theme_taxonomy_blocks_config_list($form) {
   $header = array(t('Enabled Vocabs'), t('Node count options'), t('Custom Title'),  t('Path Pattern'), t('Link Title Pattern'), t('Weight'), t('Reset'));
   $rows = array();
   $output .= drupal_render($form['main_title']);
-  foreach ($form['vocab_array']['#value'] as $vid) {
-    $row = array();
-    $row[]  = drupal_render($form['vocab'][$vid]['enable_vocab']);
-    $row[]  = drupal_render($form['vocab'][$vid]['node_count']);
-    $row[]  = drupal_render($form['vocab'][$vid]['custom_title']);
-    $row[]  = drupal_render($form['vocab'][$vid]['path_pattern']);
-    $row[]  = drupal_render($form['vocab'][$vid]['title_pattern']);
-    $row[]  = drupal_render($form['vocab'][$vid]['weight']);
-    $row[]  = drupal_render($form['vocab'][$vid]['reset']);
-    $rows[] = $row;
+  if (!empty($form['vocab_array']['#value'])) {
+    foreach ($form['vocab_array']['#value'] as $vid) {
+      $row = array();
+      $row[]  = drupal_render($form['vocab'][$vid]['enable_vocab']);
+      $row[]  = drupal_render($form['vocab'][$vid]['node_count']);
+      $row[]  = drupal_render($form['vocab'][$vid]['custom_title']);
+      $row[]  = drupal_render($form['vocab'][$vid]['path_pattern']);
+      $row[]  = drupal_render($form['vocab'][$vid]['title_pattern']);
+      $row[]  = drupal_render($form['vocab'][$vid]['weight']);
+      $row[]  = drupal_render($form['vocab'][$vid]['reset']);
+      $rows[] = $row;
+    }
   }
   $output .= theme('table', $header, $rows);
   $output .= drupal_render($form);
@@ -347,9 +349,11 @@ function taxonomy_blocks_config_submit($form, $formstate) {
   if (!empty($vid_array)) {
     foreach ($vid_array as $vid) {
       $tid_array = $formstate['values']['tb_config_form']['vocab_options']['vocab'][$vid]['term_array'];   
-      foreach ($tid_array as $tid) {
-        if ($formstate['values']['tb_config_form']['vocab_options']['vocab'][$vid]['terms'][$tid] == TRUE) {
-          $tid_checked[] = $tid;
+      if (!empty($tid_array)) {
+        foreach ($tid_array as $tid) {
+          if ($formstate['values']['tb_config_form']['vocab_options']['vocab'][$vid]['terms'][$tid] == TRUE) {
+            $tid_checked[] = $tid;
+          }
         }
       }
       
@@ -467,19 +471,20 @@ function theme_multi_taxonomyblock($tb_id = 0) {
   while ($vocabs = db_fetch_object($result)) {
     $pre_vocab_list[] = $vocabs->vid;
   }
-    
-  foreach ($pre_vocab_list as $vid) {
-    $hasterms = db_result(db_query("SELECT tid FROM {term_data} WHERE vid = %d", $vid));
-    if (!empty($hasterms)) {
-      $toplevel = taxonomy_get_toplevel($vid);
-      $has_nodes = array();
-      foreach ($toplevel as $tid) {
-        $has_nodes[] = term_has_nodes($tid);
+  if (!empty($pre_vocab_list)) { 
+    foreach ($pre_vocab_list as $vid) {
+      $hasterms = db_result(db_query("SELECT tid FROM {term_data} WHERE vid = %d", $vid));
+      if (!empty($hasterms)) {
+        $toplevel = taxonomy_get_toplevel($vid);
+        $has_nodes = array();
+        foreach ($toplevel as $tid) {
+          $has_nodes[] = term_has_nodes($tid);
+        }
+          
       }
-        
-    }
-    if (!empty($has_nodes)) {
-      $vocab_list[] = $vid;
+      if (!empty($has_nodes)) {
+        $vocab_list[] = $vid;
+      }
     }
   }
   $output = '';
@@ -492,38 +497,42 @@ function theme_multi_taxonomyblock($tb_id = 0) {
       $multiple = FALSE;
     }
     foreach ($vocab_list as $vid) {
-      if ($multiple == TRUE) {
-        if ($ismodified == 0) {
-          $vocabname = db_result(db_query("SELECT name FROM {vocabulary} WHERE vid = %d", $vid));
+      $toplevel = taxonomy_get_toplevel($vid);
+      if ($toplevel != NULL) {
+         
+        
+        if ($multiple == TRUE) {
+          if ($ismodified == 0) {
+            $vocabname = db_result(db_query("SELECT name FROM {vocabulary} WHERE vid = %d", $vid));
+          }
+          if ($ismodified != 0) {
+            $vocabname = db_result(db_query("SELECT custom_title FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
+          }
+          if ($vocabname != '<none>') {
+          $output .= '<h3>'. $vocabname .'</h3>';
+          }
         }
-        if ($ismodified != 0) {
-          $vocabname = db_result(db_query("SELECT custom_title FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
+        if ($ismodified == 0 && $tb_id != 1) {
+          $pathpattern  = 'taxonomy/term/%tid';
+          $nodecounter  = 'all';
+          $titlepattern = 'Content tagged with @termname';
         }
-        if ($vocabname != '<none>') {
-        $output .= '<h3>'. $vocabname .'</h3>';
+        if ($ismodified == 0 && $tb_id == 1) {
+          $pathpattern  = 'forum/%tid';
+          $nodecounter  = 'forum';
+          $titlepattern = 'Forums categorized as %tid';
         }
+        if ($ismodified == 1) {
+          $pathpattern = db_result(db_query("SELECT path_pattern FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
+          $nodecounter = db_result(db_query("SELECT counter FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
+          $titlepattern = db_result(db_query("SELECT title_pattern FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));      
+        }
+        $tree = jq_taxonomy_tree_creator($vid, $pathpattern, $nodecounter, $titlepattern, $omit);
+        $trail = taxonomy_trail_creator($pathpattern);
+        $menu = theme('menu_creation_by_array', $tree, $trail);
+        $output .= $menu;
       }
-      if ($ismodified == 0 && $tb_id != 1) {
-        $pathpattern  = 'taxonomy/term/%tid';
-        $nodecounter  = 'all';
-        $titlepattern = 'Content tagged with @termname';
-      }
-      if ($ismodified == 0 && $tb_id == 1) {
-        $pathpattern  = 'forum/%tid';
-        $nodecounter  = 'forum';
-        $titlepattern = 'Forums categorized as %tid';
-      }
-      if ($ismodified == 1) {
-        $pathpattern = db_result(db_query("SELECT path_pattern FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
-        $nodecounter = db_result(db_query("SELECT counter FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
-        $titlepattern = db_result(db_query("SELECT title_pattern FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));      
-      }
-      $tree = jq_taxonomy_tree_creator($vid, $pathpattern, $nodecounter, $titlepattern, $omit);
-      $trail = taxonomy_trail_creator($pathpattern);
-      $menu = theme('menu_creation_by_array', $tree, $trail);
-      $output .= $menu;
-    }
-     
+    } 
   }
   return $output;
 }
@@ -546,9 +555,13 @@ function theme_forum_taxonomyblock() {
   }
   
   $forum_vid = db_result(db_query("SELECT vid FROM {vocabulary} WHERE name = '%s'", 'Forums'));
-  $tree = jq_taxonomy_tree_creator($forum_vid, $pathpattern, $nodecounter, $titlepattern, $omit);
-  $trail = taxonomy_trail_creator($pathpattern);
-  $menu = theme('menu_creation_by_array', $tree, $trail);
+  $toplevel = taxonomy_get_toplevel($forum_vid);
+  if ($toplevel != NULL) {
+    $tree = jq_taxonomy_tree_creator($forum_vid, $pathpattern, $nodecounter, $titlepattern, $omit);
+    $trail = taxonomy_trail_creator($pathpattern);
+    $menu = theme('menu_creation_by_array', $tree, $trail);
+  }
+  
   return $menu;
 }
 /**
@@ -673,11 +686,12 @@ function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter
     $children = array();
     $tree[$termname]['below'] = array();
     $children = get_one_level_children($tid);
+    
     if (!empty($children)) {
       $allchildren = taxonomy_get_children($tid);
+     
       foreach ($allchildren as $ctid) {
-       
-        $child_has_node = term_has_nodes($ctid->tid);
+        $child_has_node[] = term_has_nodes($ctid->tid);
        
         if (!empty($omit)) {
           $child_is_omited = in_array($ctid->tid, $omit);
@@ -686,7 +700,7 @@ function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter
           $child_is_omited = FALSE;
         }
         $child_with_node_array = array();
-        if ($child_has_node != FALSE && $child_is_omited == FALSE) {
+        if (!empty($child_has_node) && $child_is_omited == FALSE) {
           $child_with_node_array[] = $ctid->tid;
         }
       }
@@ -711,7 +725,10 @@ function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter
 function jq_taxonomy_tree_creator($vid, $pathpattern = NULL, $nodecounter = 'all', $titlepattern = NULL, $omit = NULL) {
   $tree = array();
   $toplevel = taxonomy_get_toplevel($vid);
-  $tree = taxonomy_recursive_array_builder($toplevel, $pathpattern, $nodecounter, $titlepattern, $omit);
+  if ($toplevel != NULL) {
+    $tree = taxonomy_recursive_array_builder($toplevel, $pathpattern, $nodecounter, $titlepattern, $omit);
+  }
+  
   
  
   return $tree;

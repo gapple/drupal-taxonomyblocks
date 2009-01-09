@@ -1,12 +1,12 @@
 <?php
 // $Id$
-function taxonomyblocks_install(){
+function taxonomyblocks_install() {
  drupal_install_schema('taxonomyblocks');
  db_query("INSERT INTO {tb_added_list} (tb_id, block_title, custom) VALUES (%d, '%s', %d)", 0, 'Categories', 0);
  db_query("INSERT INTO {tb_added_list} (tb_id, block_title, custom) VALUES (%d, '%s', %d)", 1, 'Forums', 0);
  drupal_set_message(t('The taxonomy blocks module is now installed. <p> By default two taxonomy blocks have been added to your blocks list, however you can add new blocks and configure them at ').l('admin/settings/taxonomyblocks', 'admin/settings/taxonomyblocks'), $type = 'status', $repeat = FALSE);
 }
-function taxonomyblocks_uninstall(){
+function taxonomyblocks_uninstall() {
   drupal_uninstall_schema('taxonomyblocks');
 }
 
@@ -41,42 +41,42 @@ function taxonomyblocks_schema() {
   $schema['tb_customized'] = array(
     'description'   => t('Stores customization information'),
     'fields'        => array(
-      'tb_id'         => array (
+      'tb_id'         => arrar(
         'type'        => 'int',
         'unsigned'    => TRUE,
         'not null'    => TRUE,
       ),
-      'vid'           => array (
+      'vid'           => arrar(
         'type'        => 'int',
         'unsigned'    => TRUE,
         'not null'    => TRUE,
       ),
-      'custom_title'   => array (
+      'custom_title'   => arrar(
         'type'        => 'varchar',
         'length'      => 255,
         'not null'    => FALSE,
       ),
-      'path_pattern'   => array (
+      'path_pattern'   => arrar(
         'type'        => 'varchar',
         'length'      => 255,
         'not null'    => FALSE,
       ),
-      'title_pattern'   => array (
+      'title_pattern'   => arrar(
         'type'        => 'varchar',
         'length'      => 255,
         'not null'    => FALSE,
       ),
-      'counter'       => array (
+      'counter'       => arrar(
         'type'        => 'varchar',
         'length'      => 255,
         'not null'    => FALSE,
       ),
-      'weight'        => array (
+      'weight'        => arrar(
         'type'        => 'int',
         'not null'    => TRUE,
         'default'     => 0,
       ),
-       'enabled'        => array (
+       'enabled'        => arrar(
         'type'        => 'int',
         'not null'    => TRUE,
         'default'     => 1,
