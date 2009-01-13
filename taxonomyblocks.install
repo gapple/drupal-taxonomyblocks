@@ -41,42 +41,42 @@ function taxonomyblocks_schema() {
   $schema['tb_customized'] = array(
     'description'   => t('Stores customization information'),
     'fields'        => array(
-      'tb_id'         => arrar(
+      'tb_id'         => array(
         'type'        => 'int',
         'unsigned'    => TRUE,
         'not null'    => TRUE,
       ),
-      'vid'           => arrar(
+      'vid'           => array(
         'type'        => 'int',
         'unsigned'    => TRUE,
         'not null'    => TRUE,
       ),
-      'custom_title'   => arrar(
+      'custom_title'   => array(
         'type'        => 'varchar',
         'length'      => 255,
         'not null'    => FALSE,
       ),
-      'path_pattern'   => arrar(
+      'path_pattern'   => array(
         'type'        => 'varchar',
         'length'      => 255,
         'not null'    => FALSE,
       ),
-      'title_pattern'   => arrar(
+      'title_pattern'   => array(
         'type'        => 'varchar',
         'length'      => 255,
         'not null'    => FALSE,
       ),
-      'counter'       => arrar(
+      'counter'       => array(
         'type'        => 'varchar',
         'length'      => 255,
         'not null'    => FALSE,
       ),
-      'weight'        => arrar(
+      'weight'        => array(
         'type'        => 'int',
         'not null'    => TRUE,
         'default'     => 0,
       ),
-       'enabled'        => arrar(
+       'enabled'        => array(
         'type'        => 'int',
         'not null'    => TRUE,
         'default'     => 1,
