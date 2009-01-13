@@ -574,7 +574,7 @@ function term_has_parent($tid) {
   
  function taxonomy_get_toplevel($vid) {
   //Check to insure that the vid has terms.
-  $result = db_query('SELECT tid FROM {term_data} WHERE vid = %d ORDER BY weight ASC', $vid);
+  $result = db_query("SELECT tid FROM {term_data} WHERE vid = %d ORDER BY weight,name ASC", $vid);
   
   while ($term = db_fetch_object($result)) {
     $hasparent = term_has_parent($term->tid);
@@ -586,7 +586,7 @@ function term_has_parent($tid) {
   return $toplevel_array;
 }
 function get_one_level_children($parent_tid) {
-  $result = db_query("SELECT th.tid FROM {term_hierarchy} th, {term_data} td WHERE th.parent = %d AND td.tid = th.tid ORDER BY td.weight ASC", $parent_tid);
+  $result = db_query("SELECT th.tid FROM {term_hierarchy} th, {term_data} td WHERE th.parent = %d AND td.tid = th.tid ORDER BY td.weight,td.name ASC", $parent_tid);
   while ($term = db_fetch_object($result)) {
     $children[]   = $term->tid;
   }
