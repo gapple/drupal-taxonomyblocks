@@ -466,7 +466,12 @@ function theme_multi_taxonomyblock($tb_id = 0) {
   if ($ismodified == 1) {
     $result = db_query("SELECT vid FROM {tb_customized} WHERE tb_id = %d AND enabled = 1 ORDER BY weight ASC", $tb_id);
     $omit = db_result(db_query("SELECT omit_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
+    if (!empty($omit)) {
     $omit = explode(',', $omit);
+    }
+    else {
+      $omit = array();
+    }
   }
   while ($vocabs = db_fetch_object($result)) {
     $pre_vocab_list[] = $vocabs->vid;
@@ -592,13 +597,41 @@ function get_one_level_children($parent_tid) {
   }
   return $children;
 }
+function get_all_children($parent_tid, $prev = NULL) {
+  $level = '';
+  $level = get_one_level_children($parent_tid);
+  
+  if (!empty($level) && $prev != NULL) {
+    $children = array_merge($level, $prev);
+  }
+  if (!empty($level) && $prev == NULL) {
+      $children = $level;
+  }
+  if (empty($level) && $prev != NULL) {
+    $children = $prev;
+  }
+ 
+  if (!empty($level)) {
+    foreach ($level as $ctid) {
+      $next = array();
+      $next = get_all_children($ctid, $children);
+      if (!empty($next)) {
+        $children = array_merge($next, $children);
+      }
+    }
+  }
+  if (is_array($children)) {
+    $children = array_unique($children);
+  }
+  return $children;
+}
 /**
  * Checks to see if term has any nodes.
  * Returns a positive integer if true.
  * Returns NULL if False.
  */
 function term_has_nodes($tid) {
-  $nid = db_result(db_query("SELECT nid FROM {term_node} WHERE tid = %d", $tid));
+  $nid = db_result(db_query("SELECT tn.nid FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.status = 1 ", $tid));
   return $nid;
 }
 /**
@@ -642,9 +675,10 @@ function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter
     
     $tree[$termname]['link']['tid'] = $tid;
     $tree[$termname]['link']['path_pattern'] = $pathpattern;
+    $hasnodes = '';
     $hasnodes = term_has_nodes($tid);
+    
     $count = '';
-    if (!empty($hasnodes)) {
       $path  = str_replace('%tid', $tid, $pathpattern);
       $omited = '';
       if (!empty($omit)) {
@@ -652,9 +686,15 @@ function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter
           $omited = TRUE;
         }
       }
-      else {
+      if (empty($hasnodes)) {
+        $omited = TRUE;
+      }
+      
+      if (empty($omit) && !empty($hasnodes)) {
         $omited = FALSE;
       }
+     
+      
       if ($omited == TRUE) {
         $tree[$termname]['link']['hidden'] = '1';
       }
@@ -679,53 +719,54 @@ function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter
       else {
         $tree[$termname]['link']['options']['attributes']['title'] = t($titlepattern, array('@termname' => $termname));
       }
-    }
-    else {
-      $tree[$termname]['link']['hidden'] = '1';
-    }
+    $allchildren = array();
     $children = array();
     $tree[$termname]['below'] = array();
     $children = get_one_level_children($tid);
     
-    if (!empty($children)) {
-      $allchildren = array();
-      $allchildren = taxonomy_get_children($tid);
       
-      if (!empty($allchildren)) {
-        $child_has_node = array();
-        foreach ($allchildren as $ctid) {
-          $childnode = term_has_nodes($ctid->tid);
+    //$allchildren = taxonomy_get_children($tid);
+    
+    $allchildren = get_all_children($tid);
+    
+    if (!empty($allchildren)) {
+      $child_has_node = array();
+      foreach ($allchildren as $ctid) {
+          $childnode = term_has_nodes($ctid);
+          
           if ($childnode != FALSE) {
-            $child_has_node[] = term_has_nodes($ctid->tid);
+            $child_has_node[] = term_has_nodes($ctid);
           }         
           if (!empty($omit)) {
-            $child_is_omited = in_array($ctid->tid, $omit);
+            $child_is_omited = in_array($ctid, $omit);
           }
           else {
             $child_is_omited = FALSE;
           }
           $child_with_node_array = array();
           if (!empty($child_has_node) && $child_is_omited == FALSE) {
-            $child_with_node_array[] = $ctid->tid;
+            $child_with_node_array[] = $ctid;
           }
         }
       }
       if (!empty($child_with_node_array)) {
         $tree[$termname]['link']['has_children'] = '1';
       }
+     
       else {
         $tree[$termname]['link']['has_children'] = '0';
       }
-      
+    if (!empty($children)) {
       $subarray = taxonomy_recursive_array_builder($children, $pathpattern, $nodecounter, $titlepattern, $omit);
       $tree[$termname]['below'] = array_merge($tree[$termname]['below'], $subarray);
     }
-    else {
+    if (empty($children)) {
       $tree[$termname]['below'] = FALSE;
       $tree[$termname]['link']['has_children'] = '0';
     }
+     
   }
-  
+ 
   return $tree;
 }
 function jq_taxonomy_tree_creator($vid, $pathpattern = NULL, $nodecounter = 'all', $titlepattern = NULL, $omit = NULL) {
