@@ -35,6 +35,12 @@ function taxonomyblocks_schema() {
           'length'    => 255,
           'not null'  => FALSE,
         ),
+        'open_tids' => array(
+          'description'   => t('Comma-separated list of tids which are expanded by default'),
+          'type'          => 'varchar',
+          'length'        => 255,
+          'not null'      => FALSE,
+        ),
       ),
       'primary key' => array('tb_id'),  
   );
@@ -84,4 +90,11 @@ function taxonomyblocks_schema() {
     ),
   );
   return $schema;
+}
+
+function taxonomyblocks_update_6100() {
+  $ret = array();
+  $schema = taxonomyblocks_schema();
+  db_add_field($ret, 'tb_added_list', 'open_tids', $schema['tb_added_list']['fields']['open_tids']);
+  return $ret;
 }

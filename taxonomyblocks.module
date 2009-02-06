@@ -140,11 +140,11 @@ function taxonomy_blocks_config() {
   // We will later need to process this array to set defaults that were previously saved.
   $form['tb_config_form']['vocab_options'] = array(
     '#type' => 'fieldset',
-    '#title' => t('Omit tids'),
+    '#title' => t('Vocabulary Options'),
     '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
+    '#collapsed' => FALSE,
     '#tree' => TRUE,
-    '#description' => t('These tids will be disabled only for this block. These settings have no affect on the actual taxonomies.'),
+    '#description' => t('Omitted terms will only be hidden from this block. These settings have no affect on the actual taxonomies.'),
   );
   while ($vocab = db_fetch_object($result)) {
     $vocab_array[] = $vocab->vid;
@@ -218,7 +218,9 @@ function taxonomy_blocks_config() {
       $weight_def = 0;
     }
     $tb_id_omit_def = db_result(db_query("SELECT omit_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
-    $tid_checked = explode(',', $tb_id_omit_def);
+    $omit_tids = explode(',', $tb_id_omit_def);
+    $tb_id_open_def = db_result(db_query("SELECT open_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
+    $open_tids = explode(',', $tb_id_open_def);
     $maintitle_def = db_result(db_query("SELECT block_title FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
     $content_types = array();
     $content_types['all'] = t('All Content Types');
@@ -280,18 +282,19 @@ function taxonomy_blocks_config() {
     $sub_result = db_query("SELECT tid, name FROM {term_data} WHERE vid = %d", $vocab->vid);
     while ($term = db_fetch_object($sub_result)) {
       $term_array[] = $term->tid;
-      if (in_array($term->tid, $tid_checked) != FALSE) {
-        $term_def = TRUE;
-      }
-      else {
-        $term_def = FALSE;
-      }
-      $form['tb_config_form']['vocab_options']['vocab'][$vocab->vid]['terms'][$term->tid] = array(
-        '#type' => 'checkbox',
-        '#title' => $term->name,
-        '#default_value' => $term_def,
+      $form['tb_config_form']['vocab_options']['vocab'][$vocab->vid]['terms'][$term->tid]['name'] = array(
+        '#value' => check_plain($term->name),
       );
-     
+      $form['tb_config_form']['vocab_options']['vocab'][$vocab->vid]['terms'][$term->tid]['omit'] = array(
+        '#type' => 'checkbox',
+        '#default_value' => in_array($term->tid, $omit_tids),
+      );
+      
+      $form['tb_config_form']['vocab_options']['vocab'][$vocab->vid]['terms'][$term->tid]['open'] = array(
+        '#type' => 'checkbox',
+        '#default_value' => in_array($term->tid, $open_tids),
+      );
+      
     }
     $form['tb_config_form']['vocab_options']['vocab'][$vocab->vid]['term_array']= array(
       '#type' => 'value',
@@ -320,10 +323,6 @@ function taxonomy_blocks_config() {
   return $form;
 }
 function theme_taxonomy_blocks_config_list($form) {
-  $tb_id = $form['vocab_array']['#value'];
- 
- 
-  $title = db_result(db_query("SELECT block_title FROM {tb_added_list} WHERE tb_id = %d", $delta));
   $header = array(t('Enabled Vocabs'), t('Node count options'), t('Custom Title'),  t('Path Pattern'), t('Link Title Pattern'), t('Weight'), t('Reset'));
   $rows = array();
   $output .= drupal_render($form['main_title']);
@@ -341,18 +340,50 @@ function theme_taxonomy_blocks_config_list($form) {
     }
   }
   $output .= theme('table', $header, $rows);
+
+  if (!empty($form['vocab_array']['#value'])) {
+    foreach ($form['vocab_array']['#value'] as $vid) {
+      $header = array(t('Term'), t('Omit'), t('Expanded by default'));
+      $rows = array();
+      $form['vocab_options']['vocab'][$vid]['table']['#value'] = array();
+      if (!empty($form['vocab_options']['vocab'][$vid]['term_array']['#value'])) {
+        foreach ($form['vocab_options']['vocab'][$vid]['term_array']['#value'] as $tid) {
+          $row = array();
+          if (!empty($form['vocab_options']['vocab'][$vid]['terms'][$tid]['name'])) {
+            $row[]  = drupal_render($form['vocab_options']['vocab'][$vid]['terms'][$tid]['name']);
+          }
+          if (!empty($form['vocab_options']['vocab'][$vid]['terms'][$tid]['omit'])) {
+            $row[]  = drupal_render($form['vocab_options']['vocab'][$vid]['terms'][$tid]['omit']);
+          }
+          if (!empty($form['vocab_options']['vocab'][$vid]['terms'][$tid]['open'])) {
+            $row[]  = drupal_render($form['vocab_options']['vocab'][$vid]['terms'][$tid]['open']);
+          }
+          if (!empty($row)) {
+            $rows[] = $row;
+          }
+        }
+      }
+      //var_dump($rows);
+      $form['vocab_options']['vocab'][$vid]['table'] = array('#value' => theme('table', $header, $rows));
+    }
+  }
   $output .= drupal_render($form);
   return $output;
 }
 function taxonomy_blocks_config_submit($form, $formstate) {
   $vid_array = $formstate['values']['tb_config_form']['vocab_array'];
+  $omit_tids_checked = array();
+  $open_tids_checked = array();
   if (!empty($vid_array)) {
     foreach ($vid_array as $vid) {
       $tid_array = $formstate['values']['tb_config_form']['vocab_options']['vocab'][$vid]['term_array'];   
       if (!empty($tid_array)) {
         foreach ($tid_array as $tid) {
-          if ($formstate['values']['tb_config_form']['vocab_options']['vocab'][$vid]['terms'][$tid] == TRUE) {
-            $tid_checked[] = $tid;
+          if ($formstate['values']['tb_config_form']['vocab_options']['vocab'][$vid]['terms'][$tid]['omit'] == TRUE) {
+            $omit_tids_checked[] = $tid;
+          }
+          if ($formstate['values']['tb_config_form']['vocab_options']['vocab'][$vid]['terms'][$tid]['open'] == TRUE) {
+            $open_tids_checked[] = $tid;
           }
         }
       }
@@ -397,10 +428,9 @@ function taxonomy_blocks_config_submit($form, $formstate) {
         db_query("DELETE FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid);
       }
     }
-    if (!empty($tid_checked)) {
-      $omit_tids = implode(',', $tid_checked);
-      db_query("UPDATE {tb_added_list} SET omit_tids = '%s', custom = 1 WHERE tb_id = %d", $omit_tids, $tb_id);
-    }
+    $omit_tids = implode(',', $omit_tids_checked);
+    $open_tids = implode(',', $open_tids_checked);
+    db_query("UPDATE {tb_added_list} SET omit_tids = '%s', open_tids = '%s', custom = 1 WHERE tb_id = %d", $omit_tids, $open_tids, $tb_id);
     if ($formstate['values']['tb_config_form']['reset_all'] == TRUE) {
         taxonomy_blocks_reset($tb_id);
     }
@@ -472,7 +502,9 @@ function theme_multi_taxonomyblock($tb_id = 0) {
     else {
       $omit = array();
     }
-  }
+    $open = db_result(db_query("SELECT open_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
+    $open = explode(',', $open);
+}
   while ($vocabs = db_fetch_object($result)) {
     $pre_vocab_list[] = $vocabs->vid;
   }
@@ -532,7 +564,7 @@ function theme_multi_taxonomyblock($tb_id = 0) {
           $nodecounter = db_result(db_query("SELECT counter FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
           $titlepattern = db_result(db_query("SELECT title_pattern FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));      
         }
-        $tree = jq_taxonomy_tree_creator($vid, $pathpattern, $nodecounter, $titlepattern, $omit);
+        $tree = jq_taxonomy_tree_creator($vid, $pathpattern, $nodecounter, $titlepattern, $omit, $open);
         $trail = taxonomy_trail_creator($pathpattern);
         $menu = theme('menu_creation_by_array', $tree, $trail);
         $output .= $menu;
@@ -557,12 +589,14 @@ function theme_forum_taxonomyblock() {
     }
     $omit = db_result(db_query("SELECT omit_tids FROM {tb_added_list} WHERE tb_id = 1"));
     $omit = explode(',', $omit);
+    $open = db_result(db_query("SELECT open_tids FROM {tb_added_list} WHERE tb_id = 1"));
+    $open = explode(',', $open);
   }
   
   $forum_vid = db_result(db_query("SELECT vid FROM {vocabulary} WHERE name = '%s'", 'Forums'));
   $toplevel = taxonomy_get_toplevel($forum_vid);
   if ($toplevel != NULL) {
-    $tree = jq_taxonomy_tree_creator($forum_vid, $pathpattern, $nodecounter, $titlepattern, $omit);
+    $tree = jq_taxonomy_tree_creator($forum_vid, $pathpattern, $nodecounter, $titlepattern, $omit, $open);
     $trail = taxonomy_trail_creator($pathpattern);
     $menu = theme('menu_creation_by_array', $tree, $trail);
   }
@@ -652,24 +686,25 @@ function get_all_ancestor_csv($tid) {
 }
 
 function taxonomy_trail_creator($pathpattern) {
-    $pattern_array  = explode('/', $pathpattern);
-    $p = 0;
-    foreach ($pattern_array as $chunk) {
-      if ($chunk != '%tid') {
-        $p++;
-      }
+  $pattern_array  = explode('/', $pathpattern);
+  $p = 0;
+  foreach ($pattern_array as $chunk) {
+    if ($chunk != '%tid') {
+      $p++;
     }
-    $pagetid = "";
-    $pagetid = arg($p);
-    $ancestors  = get_all_ancestor_csv($pagetid);
-    $ancestors = explode(',', $ancestors);
-    foreach ($ancestors as $tid) {
-      $term = str_replace('%tid', $tid, $pathpattern);
-      $url_array[] = $term;
-    }
-    return $url_array;
   }
-function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter = 'all', $titlepattern = NULL, $omit = NULL) {
+  $pagetid = "";
+  $pagetid = arg($p);
+  $ancestors  = get_all_ancestor_csv($pagetid);
+  $ancestors = explode(',', $ancestors);
+  foreach ($ancestors as $tid) {
+    $term = str_replace('%tid', $tid, $pathpattern);
+    $url_array[] = $term;
+  }
+  return $url_array;
+}
+
+function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter = 'all', $titlepattern = NULL, $omit = NULL, $open = NULL) {
   foreach ($tid_array as $tid) {
     $termname =  db_result(db_query("SELECT name FROM {term_data} WHERE tid = %d", $tid));
     
@@ -751,6 +786,12 @@ function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter
       }
       if (!empty($child_with_node_array)) {
         $tree[$termname]['link']['has_children'] = '1';
+        
+        if (!empty($open)) {
+          if (in_array($tid, $open)) {
+            $tree[$termname]['link']['expanded'] = 1;
+          }
+        }
       }
      
       else {
@@ -769,11 +810,11 @@ function taxonomy_recursive_array_builder($tid_array, $pathpattern, $nodecounter
  
   return $tree;
 }
-function jq_taxonomy_tree_creator($vid, $pathpattern = NULL, $nodecounter = 'all', $titlepattern = NULL, $omit = NULL) {
+function jq_taxonomy_tree_creator($vid, $pathpattern = NULL, $nodecounter = 'all', $titlepattern = NULL, $omit = NULL, $open = NULL) {
   $tree = array();
   $toplevel = taxonomy_get_toplevel($vid);
   if ($toplevel != NULL) {
-    $tree = taxonomy_recursive_array_builder($toplevel, $pathpattern, $nodecounter, $titlepattern, $omit);
+    $tree = taxonomy_recursive_array_builder($toplevel, $pathpattern, $nodecounter, $titlepattern, $omit, $open);
   }
   
   
