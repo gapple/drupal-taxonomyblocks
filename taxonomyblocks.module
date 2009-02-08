@@ -596,8 +596,12 @@ function theme_multi_taxonomyblock($tb_id = 0) {
           if ($ismodified != 0) {
             $vocabname = db_result(db_query("SELECT custom_title FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
           }
+         
           if ($vocabname != '<none>') {
-          $output .= '<h3>'. $vocabname .'</h3>';
+            if (function_exists('tt')) {
+              $vocabname = tt('taxonomy:vocabulary:'. $vid .':name', $vocabname);
+            }
+            $output .= '<h3>'. $vocabname .'</h3>';
           }
         }
         if ($ismodified == 0 && $tb_id != 1) {
@@ -835,7 +839,9 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
   }
   foreach ($tid_array as $tid) {
     $termname =  db_result(db_query("SELECT name FROM {term_data} WHERE tid = %d", $tid));
-    
+    if (function_exists('tt')) {
+      $termname = tt('taxonomy:term:'. $tid .':name', $termname);
+    }
     $tree[$termname]['link']['tid'] = $tid;
     $tree[$termname]['link']['path_pattern'] = $pathpattern;
     $hasnodes = '';
