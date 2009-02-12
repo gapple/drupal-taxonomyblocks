@@ -833,7 +833,7 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     $nodecounter   = !empty($options['nodecounter']) ? $options['nodecounter'] : 'all';
     $ch_count      = !empty($options['children_count']) ? $options['children_count'] : 0;
     $empty         = !empty($options['empty']) ? $options['empty'] : 0;
-    $tittlepattern = !empty($options['titlepattern']) ? $options['titlepattern'] : NULL;
+    $titlepattern = !empty($options['titlepattern']) ? $options['titlepattern'] : NULL;
     $omit          = !empty($options['omit']) ? $options['omit'] : NULL;
     $open          = !empty($options['open']) ? $options['open'] : NULL;  
   }
