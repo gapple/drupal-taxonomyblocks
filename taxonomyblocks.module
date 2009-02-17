@@ -531,7 +531,15 @@ function taxonomyblocks_block($op = 'list', $delta = 0, $edit = array()) {
   return $block;
 }
 function theme_multi_taxonomyblock($tb_id = 0) {
-  
+  if (arg(0) == 'node' && is_numeric(arg(1))) {
+    $nid = arg(1);
+    $nodeuid = db_result(db_query("SELECT uid FROM {node} WHERE nid = %d", $nid));
+    $nodetype = db_result(db_query("SELECT type FROM {node} WHERE nid = %d", $nid));
+  }
+  global $user;
+  if ($user->uid) {
+    $useruid = $user->uid;
+  }
   $ismodified = db_result(db_query("SELECT custom FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
   if ($ismodified == 0) {
     if ($tb_id != 1) {
@@ -619,12 +627,27 @@ function theme_multi_taxonomyblock($tb_id = 0) {
           $nodecounter = db_result(db_query("SELECT counter FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
           $titlepattern = db_result(db_query("SELECT title_pattern FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));      
         }
+        
         $additional = variable_get('tb_additional', 0);
         $options['pathpattern']  = $pathpattern;
         $options['nodecounter']  = $nodecounter;
         $options['titlepattern'] = $titlepattern;
         $options['omit']         = $omit;
         $options['open']         = $open;
+        $options['vid']          = $vid;
+        if ($nid) {
+          $options['nid']        = $nid;
+        }
+        $options['vocabname']    = $vocabname;
+        if ($useruid) {
+          $options['useruid']    = $useruid;
+        }
+        if ($nodeuid) {
+          $options['nodeuid']    = $nodeuid;
+        }
+         if ($nodetype) {
+          $options['nodetype']    = $nodetype;
+        }
         if (is_array($additional)) {
           $options['empty']          = $additional[$tb_id][$vid]['empty'];
           $options['children_count'] = $additional[$tb_id][$vid]['children_count'];
@@ -640,6 +663,15 @@ function theme_multi_taxonomyblock($tb_id = 0) {
   return $output;
 }
 function theme_forum_taxonomyblock() {
+  if (arg(0) == 'node' && is_numeric(arg(1))) {
+    $nid = arg(1);
+    $nodeuid = db_result(db_query("SELECT uid FROM {node} WHERE nid = %d", $nid));
+    $nodetype = db_result(db_query("SELECT type FROM {node} WHERE nid = %d", $nid));
+  }
+  global $user;
+  if ($user->uid) {
+    $useruid = $user->uid;
+  }
   $ismodified = db_result(db_query("SELECT custom FROM {tb_added_list} WHERE tb_id = 1"));
   if ($ismodified == 0) {
     $pathpattern = 'forum/%tid';
@@ -669,6 +701,20 @@ function theme_forum_taxonomyblock() {
   $options['titlepattern'] = $titlepattern;
   $options['omit']         = $omit;
   $options['open']         = $open;
+  $options['vid']          = $vid;
+  if ($nid) {
+    $options['nid']        = $nid;
+  }
+  $options['vocabname']    = $vocabname;
+  if ($useruid) {
+    $options['useruid']    = $useruid;
+  }
+  if ($nodeuid) {
+    $options['nodeuid']    = $nodeuid;
+  }
+   if ($nodetype) {
+    $options['nodetype']    = $nodetype;
+  }
   if (is_array($additional)) {
     $options['empty']          = $additional['1'][$forum_vid]['empty'];
     $options['children_count'] = $additional['1'][$forum_vid]['children_count'];
@@ -833,9 +879,15 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     $nodecounter   = !empty($options['nodecounter']) ? $options['nodecounter'] : 'all';
     $ch_count      = !empty($options['children_count']) ? $options['children_count'] : 0;
     $empty         = !empty($options['empty']) ? $options['empty'] : 0;
-    $titlepattern = !empty($options['titlepattern']) ? $options['titlepattern'] : NULL;
+    $titlepattern  = !empty($options['titlepattern']) ? $options['titlepattern'] : NULL;
     $omit          = !empty($options['omit']) ? $options['omit'] : NULL;
-    $open          = !empty($options['open']) ? $options['open'] : NULL;  
+    $open          = !empty($options['open']) ? $options['open'] : NULL;
+    $vid           = !empty($options['vid']) ? $options['vid'] : NULL;
+    $nid           = !empty($options['nid']) ? $options['nid'] : NULL;
+    $vocabname     = !empty($options['vocabname']) ? $options['vocabname'] : NULL;
+    $useruid       = !empty($options['useruid']) ? $options['useruid'] : NULL;
+    $nodeuid       = !empty($options['nodeuid']) ? $options['nodeuid'] : NULL;
+    $nodetype      = !empty($options['nodetype']) ? $options['nodetype'] : NULL;
   }
   foreach ($tid_array as $tid) {
     $termname =  db_result(db_query("SELECT name FROM {term_data} WHERE tid = %d", $tid));
@@ -849,6 +901,18 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     
     $count = '';
     $path  = str_replace('%tid', $tid, $pathpattern);
+    $path  = str_replace('%termname', $termname, $path);
+    if ($nid) {
+      $path  = str_replace('%nid', $nid, $path);
+      $path  = str_replace('%nodeuid', $nodeuid, $path);
+      $path  = str_replace('%nodetype', $nodetype, $path);
+    }
+    $path  = str_replace('%vid', $vid, $path);
+    if (!empty($useruid)) {
+      $path  = str_replace('%useruid', $useruid, $path);
+    }
+    
+    $path  = str_replace('%vocabname', $vocabname, $path);
     $omited = TRUE;
     if ($nodecounter == 'none') {
       $tree[$termname]['link']['title'] = $termname ;
