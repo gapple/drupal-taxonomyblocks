@@ -360,24 +360,6 @@ function taxonomy_blocks_config() {
 }
 function theme_taxonomy_blocks_config_list($form) {
   $output .= drupal_render($form['main_title']);
- /* $header = array(t('Enabled Vocabs'), t('Node count options'), t('Custom Title'),  t('Path Pattern'), t('Link Title Pattern'), t('Weight'), t('Reset'));
-  $rows = array();
-  
-  if (!empty($form['vocab_array']['#value'])) {
-    foreach ($form['vocab_array']['#value'] as $vid) {
-      $row = array();
-      $row[]  = drupal_render($form['vocab'][$vid]['enable_vocab']);
-      $row[]  = drupal_render($form['vocab'][$vid]['node_count']);
-      $row[]  = drupal_render($form['vocab'][$vid]['custom_title']);
-      $row[]  = drupal_render($form['vocab'][$vid]['path_pattern']);
-      $row[]  = drupal_render($form['vocab'][$vid]['title_pattern']);
-      $row[]  = drupal_render($form['vocab'][$vid]['weight']);
-      $row[]  = drupal_render($form['vocab'][$vid]['reset']);
-      $rows[] = $row;
-    }
-  }
-  $output .= theme('table', $header, $rows);*/
-
   if (!empty($form['vocab_array']['#value'])) {
     foreach ($form['vocab_array']['#value'] as $vid) {
       $header = array(t('Term'), t('Omit'), t('Expanded by default'));
@@ -556,7 +538,7 @@ function theme_multi_taxonomyblock($tb_id = 0) {
     $result = db_query("SELECT vid FROM {tb_customized} WHERE tb_id = %d AND enabled = 1 ORDER BY weight ASC", $tb_id);
     $omit = db_result(db_query("SELECT omit_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
     if (!empty($omit)) {
-    $omit = explode(',', $omit);
+      $omit = explode(',', $omit);
     }
     else {
       $omit = array();
@@ -686,7 +668,12 @@ function theme_forum_taxonomyblock() {
       $nodecounter  = $forum->counter;
     }
     $omit = db_result(db_query("SELECT omit_tids FROM {tb_added_list} WHERE tb_id = 1"));
-    $omit = explode(',', $omit);
+    if (!empty($omit)) {
+      $omit = explode(',', $omit);
+    }
+    else {
+      $omit = array();
+    }
     $open = db_result(db_query("SELECT open_tids FROM {tb_added_list} WHERE tb_id = 1"));
     $open = explode(',', $open);
   }
@@ -807,9 +794,10 @@ function tb_node_counter($tid, $nodecounter = 'all', $ch_count = 0) {
   if ($ch_count == 1) {
     // Get an array of children terms
     $all = get_all_children($tid);
+    
     // Add the current tid to the array
     $all[] = $tid;
-   
+    
     $nidarray = array();
     foreach ($all as $ctid) {
       // The nodecounter variable is set to get all nodes regardless of content type.
@@ -818,7 +806,7 @@ function tb_node_counter($tid, $nodecounter = 'all', $ch_count = 0) {
       }
       // The nodecounter variable is set to filter by a content type.
       else {
-        $count = db_query("SELECT tn.nid FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.type = '%s' AND n.status = 1", $ctid, $nodecounter);
+        $result = db_query("SELECT tn.nid FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.type = '%s' AND n.status = 1", $ctid, $nodecounter);
       }
       while ($nodes = db_fetch_object($result)) {
         if (!in_array($nodes->nid, $nidarray)) {
@@ -900,6 +888,7 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     $hasnodes = term_has_nodes($tid);
     
     $count = '';
+    
     $path  = str_replace('%tid', $tid, $pathpattern);
     $path  = str_replace('%termname', $termname, $path);
     if ($nid) {
@@ -911,8 +900,19 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     if (!empty($useruid)) {
       $path  = str_replace('%useruid', $useruid, $path);
     }
-    
     $path  = str_replace('%vocabname', $vocabname, $path);
+   
+    //$sp = "/%arg\(\d\)/";
+    $sp = "/(?<=%arg\()\d(?=\))/";
+    preg_match($sp, $path, $matches);
+    if (!empty($matches)) {
+      foreach ($matches as $match) {
+        $arg = '';
+        $arg = arg($match);
+        $path = str_replace('%arg('.$match.')', $arg, $path);
+      }
+    }
+    
     $omited = TRUE;
     if ($nodecounter == 'none') {
       $tree[$termname]['link']['title'] = $termname ;
@@ -921,6 +921,8 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
       $count = tb_node_counter($tid, $nodecounter, $ch_count);
       $tree[$termname]['link']['title'] = $termname .' ('. $count .')';
     }
+    
+   
     $allchildren = get_all_children($tid);
     $child_with_node_array = array();
     if (!empty($allchildren)) {
@@ -943,8 +945,7 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
         }
       }
     }
-    
-    
+        
     if ($empty == 0) {
       if (empty($hasnodes)) {
         $omited = TRUE;
@@ -954,19 +955,20 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
       }
     }
      if ($empty == 1) {
-      if (empty($hasnodes) && empty($child_with_node_array)) {
+      if ((empty($hasnodes) && empty($child_with_node_array)) || empty($omit)) {
         $omited = TRUE;
       }
-      if (empty($omit) && !empty($hasnodes) || !empty($child_with_node_array)) {
+      if (!empty($hasnodes) || !empty($child_with_node_array)) {
         $omited = FALSE;
+        
       }
-     }
+    }
+   
     if (!empty($omit)) {
       if (in_array($tid, $omit)) {
         $omited = TRUE;
       }
     }
-    
     if ($omited == TRUE) {
       $tree[$termname]['link']['hidden'] = '1';
     }
@@ -983,16 +985,13 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     else {
       $tree[$termname]['link']['options']['attributes']['title'] = t($titlepattern, array('@termname' => $termname));
     }
-    $allchildren = array();
     $children = array();
     $tree[$termname]['below'] = array();
     $children = get_one_level_children($tid);
     
-      
-    //$allchildren = taxonomy_get_children($tid);
     
-    
-      if (!empty($child_with_node_array)) {
+   
+    if (!empty($child_with_node_array)) {
         $tree[$termname]['link']['has_children'] = '1';
         
         if (!empty($open)) {
@@ -1054,5 +1053,13 @@ function taxonomyblocks_help($path, $arg) {
   switch ($path) {
     case 'admin/settings/taxonomyblocks/configure' :
       return t('These settings will only affect the display of vocabs in this particular block. Please note that while the path pattern gives you control over the href of the links, it is up to you to insure that there is a view or a menu callback in place to catch them. Also note that while the node count options allow you to specify which content types will be counted up this does not mean that the page will be automatically adjusted to only show this content type. You must control this from within the view that you create. If you don\'t know what any of this means, then you should probably just leave the defaults in place for the path pattern. By default blocks containing multiple taxonomies will have either the title of the vocab or the custom title of your choosing. If you wish to display multiple vocabs with no titles over individual vocabs you can enter &lt;none&gt; for the custom title field.');
+  }
+}
+/**
+ * Implementation of hook_taxonomy().
+ */
+function taxonomyblocks_taxonomy($op, $type, $array = NULL) {
+  if ($type == 'vocabulary' && $op == 'delete') {
+    db_query("DELETE FROM {tb_customized} WHERE vid = %d", (int)$array['vid']);
   }
 }
