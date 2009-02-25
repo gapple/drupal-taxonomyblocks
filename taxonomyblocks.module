@@ -390,6 +390,7 @@ function theme_taxonomy_blocks_config_list($form) {
   return $output;
 }
 function taxonomy_blocks_config_submit($form, $formstate) {
+  $additional = variable_get('tb_additional', array());
   $vid_array = $formstate['values']['tb_config_form']['vocab_array'];
   $omit_tids_checked = array();
   $open_tids_checked = array();
