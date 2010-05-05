@@ -1,0 +1,10 @@
+/* $Id$ */
+.vocab_edit_link {
+  font-size:10px;
+  position:absolute;
+  padding:5px;
+  background-color:#fff;
+  display:none;
+  margin-left:-250px;
+  border:1px solid #666;
+}

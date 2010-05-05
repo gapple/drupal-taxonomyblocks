@@ -513,6 +513,7 @@ function taxonomyblocks_block($op = 'list', $delta = 0, $edit = array()) {
   //end switch $op
   return $block;
 }
+
 function theme_multi_taxonomyblock($tb_id = 0) {
   if (arg(0) == 'node' && is_numeric(arg(1))) {
     $nid = arg(1);
@@ -546,7 +547,7 @@ function theme_multi_taxonomyblock($tb_id = 0) {
     }
     $open = db_result(db_query("SELECT open_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
     $open = explode(',', $open);
-}
+  }
   while ($vocabs = db_fetch_object($result)) {
     $pre_vocab_list[] = $vocabs->vid;
   }
@@ -555,9 +556,10 @@ function theme_multi_taxonomyblock($tb_id = 0) {
       $hasterms = db_result(db_query("SELECT tid FROM {term_data} WHERE vid = %d", $vid));
       if (!empty($hasterms)) {
         $toplevel = taxonomy_get_toplevel($vid);
+        $nodecounter = db_result(db_query("SELECT counter FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
         $has_nodes = array();
         foreach ($toplevel as $tid) {
-          $has_nodes[] = term_has_nodes($tid);
+          $has_nodes[] = term_has_nodes($tid, $nodecounter);
         }
           
       }
@@ -578,23 +580,8 @@ function theme_multi_taxonomyblock($tb_id = 0) {
     foreach ($vocab_list as $vid) {
       $toplevel = taxonomy_get_toplevel($vid);
       if ($toplevel != NULL) {
-         
+
         
-        if ($multiple == TRUE) {
-          if ($ismodified == 0) {
-            $vocabname = db_result(db_query("SELECT name FROM {vocabulary} WHERE vid = %d", $vid));
-          }
-          if ($ismodified != 0) {
-            $vocabname = db_result(db_query("SELECT custom_title FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
-          }
-         
-          if ($vocabname != '<none>') {
-            if (function_exists('tt')) {
-              $vocabname = tt('taxonomy:vocabulary:'. $vid .':name', $vocabname);
-            }
-            $output .= '<h3>'. $vocabname .'</h3>';
-          }
-        }
         if ($ismodified == 0 && $tb_id != 1) {
           $pathpattern  = 'taxonomy/term/%tid';
           $nodecounter  = 'all';
@@ -639,6 +626,29 @@ function theme_multi_taxonomyblock($tb_id = 0) {
         $tree = jq_taxonomy_tree_creator($vid, $options);
         $trail = taxonomy_trail_creator($pathpattern);
         $menu = theme('menu_creation_by_array', $tree, $trail);
+        if ($multiple == TRUE) {
+          if ($ismodified == 0) {
+            $vocabname = db_result(db_query("SELECT name FROM {vocabulary} WHERE vid = %d", $vid));
+          }
+          if ($ismodified != 0) {
+            $vocabname = db_result(db_query("SELECT custom_title FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
+          }
+         
+          if (($vocabname != '<none>') && !empty($menu)) {
+            if (function_exists('tt')) {
+              $vocabname = tt('taxonomy:vocabulary:'. $vid .':name', $vocabname);
+            }
+            if (user_access('administer taxonomy')) {
+              $path = drupal_get_path('module', 'taxonomyblocks');
+              drupal_add_css($path.'/taxonomyblocks.css');
+              drupal_add_js($path.'/taxonomyblocks.js');
+              $output .= '<h3><span class="vocab_edit_link">'.vocab_edit_link($vid).'</span>'. $vocabname .'</h3>';
+            }
+            else {
+              $output .= '<h3>'. $vocabname .'</h3>';
+            }
+          }
+        }
         $output .= $menu;
       }
     } 
@@ -778,18 +788,24 @@ function get_all_children($parent_tid, $prev = NULL) {
  * Returns a positive integer if true.
  * Returns NULL if False.
  */
-function term_has_nodes($tid) {
-  $nid = db_result(db_query("SELECT tn.nid FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.status = 1 ", $tid));
+function term_has_nodes($tid, $nodecounter = 'all') {
+  if ($nodecounter != 'all') {
+    $nid = db_result(db_query(db_rewrite_sql("SELECT tn.nid FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.type = '%s' AND n.status = 1 AND n.vid = tn.vid"), $tid, $nodecounter));
+  }
+  else {
+    $nid = db_result(db_query(db_rewrite_sql("SELECT tn.nid FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.status = 1 AND n.vid = tn.vid"), $tid));	
+  }
   return $nid;
 }
+
 function tb_node_counter($tid, $nodecounter = 'all', $ch_count = 0) {
   
   if ($ch_count == 0) {
     if ($nodecounter != 'all') {
-      $count = db_result(db_query("SELECT COUNT(tn.nid) FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.type = '%s' AND n.status = 1", $tid, $nodecounter));
+      $count = $count = db_result(db_query(db_rewrite_sql("SELECT COUNT(tn.nid) FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.type = '%s' AND n.status = 1 AND n.vid = tn.vid"), $tid, $nodecounter));
     }
     if ($nodecounter == 'all') {
-      $count = db_result(db_query("SELECT COUNT(tn.nid) FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.status = 1", $tid));
+      $count = $count = db_result(db_query(db_rewrite_sql("SELECT COUNT(tn.nid) FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.status = 1 AND n.vid = tn.vid"), $tid));
     }
   }
   if ($ch_count == 1) {
@@ -803,11 +819,11 @@ function tb_node_counter($tid, $nodecounter = 'all', $ch_count = 0) {
     foreach ($all as $ctid) {
       // The nodecounter variable is set to get all nodes regardless of content type.
       if ($nodecounter == 'all') {
-        $result = db_query("SELECT tn.nid FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.status = 1", $ctid);
+        $result = db_query(db_rewrite_sql("SELECT tn.nid FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.status = 1 AND n.vid = tn.vid"), $ctid);
       }
       // The nodecounter variable is set to filter by a content type.
       else {
-        $result = db_query("SELECT tn.nid FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.type = '%s' AND n.status = 1", $ctid, $nodecounter);
+        $result = db_query(db_rewrite_sql("SELECT tn.nid FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.type = '%s' AND n.status = 1 AND n.vid = tn.vid"), $ctid, $nodecounter);
       }
       while ($nodes = db_fetch_object($result)) {
         if (!in_array($nodes->nid, $nidarray)) {
@@ -885,8 +901,11 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     }
     $tree[$termname]['link']['tid'] = $tid;
     $tree[$termname]['link']['path_pattern'] = $pathpattern;
+    $tree[$termname]['link']['editaccess'] = 'administer taxonomy';
+    $tree[$termname]['link']['editpath'] = 'admin/content/taxonomy/edit/term/'.$tid;
+    $tree[$termname]['link']['edit_text'] = t('Edit this term');
     $hasnodes = '';
-    $hasnodes = term_has_nodes($tid);
+    $hasnodes = term_has_nodes($tid, $nodecounter);
     
     $count = '';
     
@@ -902,8 +921,7 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
       $path  = str_replace('%useruid', $useruid, $path);
     }
     $path  = str_replace('%vocabname', $vocabname, $path);
-   
-    //$sp = "/%arg\(\d\)/";
+
     $sp = "/(?<=%arg\()\d(?=\))/";
     preg_match($sp, $path, $matches);
     if (!empty($matches)) {
@@ -913,8 +931,7 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
         $path = str_replace('%arg('.$match.')', $arg, $path);
       }
     }
-    
-    $omited = TRUE;
+
     if ($nodecounter == 'none') {
       $tree[$termname]['link']['title'] = $termname ;
     }
@@ -930,9 +947,8 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
       $child_has_node = array();
       foreach ($allchildren as $ctid) {
         $childnode = term_has_nodes($ctid);
-        
         if ($childnode != FALSE) {
-          $child_has_node[] = term_has_nodes($ctid);
+          $child_has_node[] = $childnode;
         }         
         if (!empty($omit)) {
           $child_is_omited = in_array($ctid, $omit);
@@ -955,16 +971,14 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
         $omited = FALSE;
       }
     }
-     if ($empty == 1) {
-      if ((empty($hasnodes) && empty($child_with_node_array)) || empty($omit)) {
+    if ($empty == 1) {
+      if ((empty($hasnodes) && empty($child_with_node_array))) {
         $omited = TRUE;
       }
       if (!empty($hasnodes) || !empty($child_with_node_array)) {
-        $omited = FALSE;
-        
+        $omited = FALSE;  
       }
     }
-   
     if (!empty($omit)) {
       if (in_array($tid, $omit)) {
         $omited = TRUE;
@@ -1024,9 +1038,6 @@ function jq_taxonomy_tree_creator($vid, $options) {
   if ($toplevel != NULL) {
     $tree = taxonomy_recursive_array_builder($toplevel, $options);
   }
-  
-  
- 
   return $tree;
 }
 
@@ -1063,4 +1074,8 @@ function taxonomyblocks_taxonomy($op, $type, $array = NULL) {
   if ($type == 'vocabulary' && $op == 'delete') {
     db_query("DELETE FROM {tb_customized} WHERE vid = %d", (int)$array['vid']);
   }
+}
+function vocab_edit_link($vid) {
+  $output = l(t('Rearrange Terms'), 'admin/content/taxonomy/'.$vid) .' | '. l(t('Edit Vocabulary'), 'admin/content/taxonomy/edit/vocabulary/'.$vid ); 
+  return $output;
 }
