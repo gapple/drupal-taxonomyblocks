@@ -434,12 +434,8 @@ function taxonomy_blocks_config_submit($form, $formstate) {
         $node_count   = $formstate['values']['tb_config_form']['vocab'][$vid]['node_count'];
         $empty        = $formstate['values']['tb_config_form']['vocab'][$vid]['empty'];
         $ch_count     = $formstate['values']['tb_config_form']['vocab'][$vid]['children_count'];
-        if (!empty($ch_count)) {
-          $additional[$tb_id][$vid]['children_count'] = $ch_count;
-        }
-        if (!empty($empty)) {
-          $additional[$tb_id][$vid]['empty'] = $empty;
-        }
+        $additional[$tb_id][$vid]['children_count'] = $ch_count;
+        $additional[$tb_id][$vid]['empty'] = $empty;
         $weight       = $formstate['values']['tb_config_form']['vocab'][$vid]['weight'];
         $enabled      = $formstate['values']['tb_config_form']['vocab'][$vid]['enable_vocab'];
         if ($enabled == TRUE) {
