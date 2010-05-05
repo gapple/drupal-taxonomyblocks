@@ -535,6 +535,7 @@ function theme_multi_taxonomyblock($tb_id = 0) {
   if ($ismodified == 1) {
     $result = db_query("SELECT vid FROM {tb_customized} WHERE tb_id = %d AND enabled = 1 ORDER BY weight ASC", $tb_id);
     $omit = db_result(db_query("SELECT omit_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
+    
     if (!empty($omit)) {
       $omit = explode(',', $omit);
     }
@@ -891,6 +892,7 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     $nodetype      = !empty($options['nodetype']) ? $options['nodetype'] : NULL;
   }
   foreach ($tid_array as $tid) {
+    
     $termname =  db_result(db_query("SELECT name FROM {term_data} WHERE tid = %d", $tid));
     if (function_exists('tt')) {
       $termname = tt('taxonomy:term:'. $tid .':name', $termname);
@@ -952,13 +954,14 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
         else {
           $child_is_omited = FALSE;
         }
+        
         $child_with_node_array = array();
         if (!empty($child_has_node) && $child_is_omited == FALSE) {
           $child_with_node_array[] = $ctid;
         }
       }
     }
-        
+    $omited = FALSE;    
     if ($empty == 0) {
       if (empty($hasnodes)) {
         $omited = TRUE;
@@ -967,6 +970,7 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
         $omited = FALSE;
       }
     }
+
     if ($empty == 1) {
       if ((empty($hasnodes) && empty($child_with_node_array))) {
         $omited = TRUE;
