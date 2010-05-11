@@ -786,7 +786,7 @@ function get_all_children($parent_tid, $prev = NULL) {
  * Returns NULL if False.
  */
 function term_has_nodes($tid, $nodecounter = 'all') {
-  if ($nodecounter != 'all') {
+  if ($nodecounter != 'all' && $nodecounter != 'none') {
     $nid = db_result(db_query(db_rewrite_sql("SELECT tn.nid FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.type = '%s' AND n.status = 1 AND n.vid = tn.vid"), $tid, $nodecounter));
   }
   else {
@@ -944,7 +944,7 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     if (!empty($allchildren)) {
       $child_has_node = array();
       foreach ($allchildren as $ctid) {
-        $childnode = term_has_nodes($ctid);
+        $childnode = term_has_nodes($ctid, $nodecounter);
         if ($childnode != FALSE) {
           $child_has_node[] = $childnode;
         }         
