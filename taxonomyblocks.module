@@ -254,6 +254,7 @@ function taxonomy_blocks_config() {
     if (is_array($additional)) {
       $children_def = $additional[$tb_id][$vocab->vid]['children_count'];
       $empty_def = $additional[$tb_id][$vocab->vid]['empty'];
+      $empty_all_def = $additional[$tb_id][$vocab->vid]['empty-all'];
     }
     
     $form['tb_config_form']['main_title'] = array(
@@ -295,6 +296,11 @@ function taxonomy_blocks_config() {
       '#type' => 'checkbox',
       '#title' => t("Show terms that don't have nodes if at least one child term has a node."),
       '#default_value' => $empty_def,
+    );
+    $form['tb_config_form']['vocab'][$vocab->vid]['empty-all'] = array(
+      '#type' => 'checkbox',
+      '#title' => t("Show terms regardless of nodes."),
+      '#default_value' => $empty_all_def,
     );
     $form['tb_config_form']['vocab'][$vocab->vid]['custom_title'] = array(
       '#type' => 'textfield',
@@ -452,9 +458,11 @@ function taxonomy_blocks_config_submit($form, $formstate) {
         $pathpattern  = check_plain($formstate['values']['tb_config_form']['vocab'][$vid]['path_pattern']);
         $node_count   = $formstate['values']['tb_config_form']['vocab'][$vid]['node_count'];
         $empty        = $formstate['values']['tb_config_form']['vocab'][$vid]['empty'];
+        $empty_all    = $formstate['values']['tb_config_form']['vocab'][$vid]['empty-all'];
         $ch_count     = $formstate['values']['tb_config_form']['vocab'][$vid]['children_count'];
         $additional[$tb_id][$vid]['children_count'] = $ch_count;
         $additional[$tb_id][$vid]['empty'] = $empty;
+        $additional[$tb_id][$vid]['empty-all'] = $empty_all;
         $weight       = $formstate['values']['tb_config_form']['vocab'][$vid]['weight'];
         $enabled      = $formstate['values']['tb_config_form']['vocab'][$vid]['enable_vocab'];
         if ($enabled == TRUE) {
@@ -636,6 +644,7 @@ function theme_multi_taxonomyblock($tb_id = 0) {
         }
         if (is_array($additional)) {
           $options['empty']          = $additional[$tb_id][$vid]['empty'];
+          $options['empty-all']      = $additional[$tb_id][$vid]['empty-all'];
           $options['children_count'] = $additional[$tb_id][$vid]['children_count'];
         }
         
@@ -731,6 +740,7 @@ function theme_forum_taxonomyblock() {
   }
   if (is_array($additional)) {
     $options['empty']          = $additional['1'][$forum_vid]['empty'];
+    $options['empty-all']      = $additional['1'][$vid]['empty-all'];
     $options['children_count'] = $additional['1'][$forum_vid]['children_count'];
   }
   
@@ -900,6 +910,7 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     $nodecounter   = !empty($options['nodecounter']) ? $options['nodecounter'] : 'all';
     $ch_count      = !empty($options['children_count']) ? $options['children_count'] : 0;
     $empty         = !empty($options['empty']) ? $options['empty'] : 0;
+    $empty_all     = !empty($options['empty-all']) ? $options['empty-all'] : 0;
     $titlepattern  = !empty($options['titlepattern']) ? $options['titlepattern'] : NULL;
     $omit          = !empty($options['omit']) ? $options['omit'] : NULL;
     $open          = !empty($options['open']) ? $options['open'] : NULL;
@@ -922,7 +933,12 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     $tree[$termname]['link']['editpath'] = 'admin/content/taxonomy/edit/term/'.$tid;
     $tree[$termname]['link']['edit_text'] = t('Edit this term');
     $hasnodes = '';
-    $hasnodes = term_has_nodes($tid, $nodecounter);
+    if ($empty_all == 0) {
+      $hasnodes = term_has_nodes($tid, $nodecounter);
+    }
+    else {
+      $hasnodes = TRUE;
+    }
     
     $count = '';
     
@@ -963,7 +979,12 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     if (!empty($allchildren)) {
       $child_has_node = array();
       foreach ($allchildren as $ctid) {
-        $childnode = term_has_nodes($ctid, $nodecounter);
+        if ($empty_all == 0) {
+          $childnode = term_has_nodes($ctid, $nodecounter);
+        }
+        else {
+          $childnode = 'not checked';
+        }
         if ($childnode != FALSE) {
           $child_has_node[] = $childnode;
         }         
