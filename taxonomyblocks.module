@@ -117,6 +117,7 @@ function taxonomy_blocks_reset($tb_id_token) {
     }
     drupal_set_message(t('The block has been reset'), $type = 'status', $repeat = FALSE);
     drupal_goto('admin/settings/taxonomyblocks');
+    cache_clear_all('*', 'cache_taxonomyblocks', TRUE);
   }
   else {
     drupal_access_denied();
@@ -254,7 +255,6 @@ function taxonomy_blocks_config() {
     if (is_array($additional)) {
       $children_def = $additional[$tb_id][$vocab->vid]['children_count'];
       $empty_def = $additional[$tb_id][$vocab->vid]['empty'];
-      $empty_all_def = $additional[$tb_id][$vocab->vid]['empty-all'];
     }
     
     $form['tb_config_form']['main_title'] = array(
@@ -297,11 +297,6 @@ function taxonomy_blocks_config() {
       '#title' => t("Show terms that don't have nodes if at least one child term has a node."),
       '#default_value' => $empty_def,
     );
-    $form['tb_config_form']['vocab'][$vocab->vid]['empty-all'] = array(
-      '#type' => 'checkbox',
-      '#title' => t("Show terms regardless of nodes."),
-      '#default_value' => $empty_all_def,
-    );
     $form['tb_config_form']['vocab'][$vocab->vid]['custom_title'] = array(
       '#type' => 'textfield',
       '#title' => t('Custom title for vocabulary'), 
@@ -313,7 +308,6 @@ function taxonomy_blocks_config() {
       '#title' => t('Path pattern'),
       '#size' => 40,
       '#default_value' => $path_def,
-      '#required' => TRUE,
     );
     $form['tb_config_form']['vocab'][$vocab->vid]['title_pattern'] = array(
       '#type' => 'textfield',
@@ -458,11 +452,9 @@ function taxonomy_blocks_config_submit($form, $formstate) {
         $pathpattern  = check_plain($formstate['values']['tb_config_form']['vocab'][$vid]['path_pattern']);
         $node_count   = $formstate['values']['tb_config_form']['vocab'][$vid]['node_count'];
         $empty        = $formstate['values']['tb_config_form']['vocab'][$vid]['empty'];
-        $empty_all    = $formstate['values']['tb_config_form']['vocab'][$vid]['empty-all'];
         $ch_count     = $formstate['values']['tb_config_form']['vocab'][$vid]['children_count'];
         $additional[$tb_id][$vid]['children_count'] = $ch_count;
         $additional[$tb_id][$vid]['empty'] = $empty;
-        $additional[$tb_id][$vid]['empty-all'] = $empty_all;
         $weight       = $formstate['values']['tb_config_form']['vocab'][$vid]['weight'];
         $enabled      = $formstate['values']['tb_config_form']['vocab'][$vid]['enable_vocab'];
         if ($enabled == TRUE) {
@@ -487,17 +479,42 @@ function taxonomy_blocks_config_submit($form, $formstate) {
     $open_tids = implode(',', $open_tids_checked);
     db_query("UPDATE {tb_added_list} SET omit_tids = '%s', open_tids = '%s', custom = 1 WHERE tb_id = %d", $omit_tids, $open_tids, $tb_id);
     if ($formstate['values']['tb_config_form']['reset_all'] == TRUE) {
-        taxonomy_blocks_reset($tb_id);
+        $tb_id_token = $tb_id.'-'.drupal_get_token('tb_del');
+        taxonomy_blocks_reset($tb_id_token);
         $additional[$tb_id] = array();
         variable_set('tb_additional', $additional);
     }
     
   }
-    drupal_set_message(t('Your changes have been saved'), $type = 'status', $repeat = FALSE );
-    drupal_goto('admin/settings/taxonomyblocks');
+  cache_clear_all('*', 'cache_taxonomyblocks', TRUE);
+  drupal_set_message(t('Your changes have been saved'), $type = 'status', $repeat = FALSE );
+  drupal_goto('admin/settings/taxonomyblocks');
 }
-  
-  
+/**
+ * Implementation of hook_init().
+ */
+function taxonomyblocks_init() {
+  if (user_access('administer taxonomy')) {
+    $path = drupal_get_path('module', 'taxonomyblocks');
+    drupal_add_css($path.'/taxonomyblocks.css');
+    drupal_add_js($path.'/taxonomyblocks.js');
+  }
+}
+/**
+ * Implementation of hook_flush_caches().
+ */
+function taxonomyblocks_flush_caches() {
+  return array('cache_taxonomyblocks');
+}
+
+/**
+ * Implementation of hook_nodeapi().
+ */
+function taxonomyblocks_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+  if ($op == 'update' || $op == 'insert') {
+    cache_clear_all('*', 'cache_taxonomyblocks', TRUE);
+  }
+}
 
 
 /**
@@ -524,7 +541,18 @@ function taxonomyblocks_block($op = 'list', $delta = 0, $edit = array()) {
         if ($item != 1) {
           if ($delta == $item) {
             $block['subject'] = db_result(db_query("SELECT block_title FROM {tb_added_list} WHERE tb_id = %d", $item));
-            $block['content'] = theme('multi_taxonomyblock', $item);
+            $tb_cache = NULL;
+            $tb_cache = cache_get($item, 'cache_taxonomyblocks');
+            if ($tb_cache->data) {
+              $block['content'] = $tb_cache->data['content'];
+            }
+            else {
+              $block['content'] = theme('multi_taxonomyblock', $item);
+              $cachedata = array();
+              $cachedata['content'] = $block['content'];
+              cache_set($item, $cachedata, 'cache_taxonomyblocks');
+            }
+            
           }
         }
       }
@@ -644,7 +672,6 @@ function theme_multi_taxonomyblock($tb_id = 0) {
         }
         if (is_array($additional)) {
           $options['empty']          = $additional[$tb_id][$vid]['empty'];
-          $options['empty-all']      = $additional[$tb_id][$vid]['empty-all'];
           $options['children_count'] = $additional[$tb_id][$vid]['children_count'];
         }
         
@@ -664,9 +691,6 @@ function theme_multi_taxonomyblock($tb_id = 0) {
               $vocabname = tt('taxonomy:vocabulary:'. $vid .':name', $vocabname);
             }
             if (user_access('administer taxonomy')) {
-              $path = drupal_get_path('module', 'taxonomyblocks');
-              drupal_add_css($path.'/taxonomyblocks.css');
-              drupal_add_js($path.'/taxonomyblocks.js');
               $output .= '<h3><span class="vocab_edit_link">'.vocab_edit_link($vid).'</span>'. $vocabname .'</h3>';
             }
             else {
@@ -740,7 +764,6 @@ function theme_forum_taxonomyblock() {
   }
   if (is_array($additional)) {
     $options['empty']          = $additional['1'][$forum_vid]['empty'];
-    $options['empty-all']      = $additional['1'][$vid]['empty-all'];
     $options['children_count'] = $additional['1'][$forum_vid]['children_count'];
   }
   
@@ -824,14 +847,19 @@ function term_has_nodes($tid, $nodecounter = 'all') {
   return $nid;
 }
 
-function tb_node_counter($tid, $nodecounter = 'all', $ch_count = 0) {
-  
+/**
+ * @$tid The tid of the term in question
+ * @$nodecounter The count mode chosen through the interface. This can be overridden when called in a theme or a module
+ * @$ch_count 0 if children of a term are not added to the total count of a term, 1 if the count of the children is added.
+ * @return The count of the nodes that are expected to show in the resulting landing page.
+ */
+function theme_tb_node_counter($tid, $nodecounter = 'all', $ch_count = 0) {
   if ($ch_count == 0) {
     if ($nodecounter != 'all') {
-      $count = $count = db_result(db_query(db_rewrite_sql("SELECT COUNT(tn.nid) FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.type = '%s' AND n.status = 1 AND n.vid = tn.vid"), $tid, $nodecounter));
+      $count = db_result(db_query(db_rewrite_sql("SELECT COUNT(tn.nid) FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.type = '%s' AND n.status = 1 AND n.vid = tn.vid"), $tid, $nodecounter));
     }
     if ($nodecounter == 'all') {
-      $count = $count = db_result(db_query(db_rewrite_sql("SELECT COUNT(tn.nid) FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.status = 1 AND n.vid = tn.vid"), $tid));
+      $count = db_result(db_query(db_rewrite_sql("SELECT COUNT(tn.nid) FROM {term_node} tn, {node} n WHERE tn.tid = %d AND n.nid = tn.nid AND n.status = 1 AND n.vid = tn.vid"), $tid));
     }
   }
   if ($ch_count == 1) {
@@ -910,7 +938,6 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     $nodecounter   = !empty($options['nodecounter']) ? $options['nodecounter'] : 'all';
     $ch_count      = !empty($options['children_count']) ? $options['children_count'] : 0;
     $empty         = !empty($options['empty']) ? $options['empty'] : 0;
-    $empty_all     = !empty($options['empty-all']) ? $options['empty-all'] : 0;
     $titlepattern  = !empty($options['titlepattern']) ? $options['titlepattern'] : NULL;
     $omit          = !empty($options['omit']) ? $options['omit'] : NULL;
     $open          = !empty($options['open']) ? $options['open'] : NULL;
@@ -933,12 +960,7 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     $tree[$termname]['link']['editpath'] = 'admin/content/taxonomy/edit/term/'.$tid;
     $tree[$termname]['link']['edit_text'] = t('Edit this term');
     $hasnodes = '';
-    if ($empty_all == 0) {
-      $hasnodes = term_has_nodes($tid, $nodecounter);
-    }
-    else {
-      $hasnodes = TRUE;
-    }
+    $hasnodes = term_has_nodes($tid, $nodecounter);
     
     $count = '';
     
@@ -979,12 +1001,7 @@ function taxonomy_recursive_array_builder($tid_array, $options) {
     if (!empty($allchildren)) {
       $child_has_node = array();
       foreach ($allchildren as $ctid) {
-        if ($empty_all == 0) {
-          $childnode = term_has_nodes($ctid, $nodecounter);
-        }
-        else {
-          $childnode = 'not checked';
-        }
+        $childnode = term_has_nodes($ctid, $nodecounter);
         if ($childnode != FALSE) {
           $child_has_node[] = $childnode;
         }         
@@ -1086,6 +1103,13 @@ function taxonomyblocks_theme() {
     'multi_taxonomyblock' => array(
       'arguments' => array(
         'tb_id' => NULL,
+      ),
+    ),
+    'tb_node_counter' => array(
+      'arguments' => array(
+        'tid' => NULL,
+        'nodecounter' => NULL,
+        'ch_count' => NULL,
       ),
     ),
     'taxonomy_blocks_config_list' => array(
