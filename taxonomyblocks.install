@@ -1,5 +1,4 @@
 <?php
-// $Id$
 function taxonomyblocks_install() {
  drupal_install_schema('taxonomyblocks');
  db_query("INSERT INTO {tb_added_list} (tb_id, block_title, custom) VALUES (%d, '%s', %d)", 0, 'Categories', 0);

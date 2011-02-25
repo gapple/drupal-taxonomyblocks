@@ -1,5 +1,4 @@
 <?php
-// $Id$
 /**
  * @file
  * Taxonomyblocks module creates an interface for creating customized blocks for linking to taxonomy terms, views or callback functions.

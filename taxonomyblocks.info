@@ -1,4 +1,3 @@
-; $Id$
 name = Advanced Taxonomy Blocks
 description = Creates A expandable taxonomy block for all vocabularies and separate blocks for each vocab if desired.
 dependencies[] = jquerymenu
