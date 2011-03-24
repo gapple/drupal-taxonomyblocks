@@ -184,50 +184,44 @@ function taxonomy_blocks_config() {
       $path_set       = '';
       $custom_title_set = '';
       $weight_set       = '';
-      $custom_title_set = db_result(db_query("SELECT custom_title FROM {tb_customized} WHERE tb_id = %d and vid = %d", $tb_id, $vocab->vid));
-      $enabled_set    = db_result(db_query("SELECT enabled FROM {tb_customized} WHERE tb_id = %d and vid = %d", $tb_id, $vocab->vid));
-      $counter_set    = db_result(db_query("SELECT counter FROM {tb_customized} WHERE tb_id = %d and vid = %d", $tb_id, $vocab->vid));
-      $path_set       = db_result(db_query("SELECT path_pattern FROM {tb_customized} WHERE tb_id = %d and vid = %d", $tb_id, $vocab->vid));
-      $link_title_set = db_result(db_query("SELECT title_pattern FROM {tb_customized} WHERE tb_id = %d and vid = %d", $tb_id, $vocab->vid));
-      $weight_set     = db_result(db_query("SELECT weight FROM {tb_customized} WHERE tb_id = %d and vid = %d", $tb_id, $vocab->vid));
-      if (!empty($custom_title_set)) {
-        $custom_title_def = $custom_title_set;
+      $customresult = db_query("SELECT enabled, custom_title, counter, path_pattern, title_pattern, weight FROM {tb_customized} WHERE tb_id = %d and vid = %d", $tb_id, $vocab->vid);
+      $customdata = db_fetch_object($customresult);
+
+      $enabled_def = ($customdata->enabled == 1);
+
+      if (!empty($customdata->custom_title)) {
+        $custom_title_def = $customdata->custom_title;
       }
       else {
         $custom_title_def = check_plain($vocab->name);
       }
-      if (!empty($counter_set)) {
-        $node_count_def = $counter_set;
+      if (!empty($customdata->counter)) {
+        $node_count_def = $customdata->counter;
       }
       else {
         $node_count_def = 'all';
       }
-      if (!empty($path_set)) {
-        $path_def = $path_set;
+      if (!empty($customdata->path_pattern)) {
+        $path_def = $customdata->path_pattern;
       }
       else {
         $path_def = 'taxonomy/term/%tid';
       }
-      if (!empty($link_title_set)) {
-        $link_title_def = $link_title_set;
+      if (!empty($customdata->title_pattern)) {
+        $link_title_def = $customdata->title_pattern;
       }
       else {
         $link_title_def = 'Content tagged with @termname';
       }
-      if ($enabled_set == 1) {
-        $enabled_def = TRUE;
-      }
-      else {
-        $enabled_def = FALSE;
-      }
-      if (!empty($weight_set)) {
-        $weight_def = $weight_set;
+
+      if (!empty($customdata->weight)) {
+        $weight_def = $customdata->weight;
       }
       else {
         $weight_def = 0;
       }
     }
-    if ($ismodified == 0) {
+    else if ($ismodified == 0) {
 
       if ($tb_id != 1) {
         $link_title_def = 'Content tagged with @termname';
@@ -243,11 +237,12 @@ function taxonomy_blocks_config() {
       $custom_title_def = check_plain($vocab->name);
       $weight_def = 0;
     }
-    $tb_id_omit_def = db_result(db_query("SELECT omit_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
-    $omit_tids = explode(',', $tb_id_omit_def);
-    $tb_id_open_def = db_result(db_query("SELECT open_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
-    $open_tids = explode(',', $tb_id_open_def);
-    $maintitle_def = db_result(db_query("SELECT block_title FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
+    $tb_added_result = db_result(db_query("SELECT omit_tids, open_tids, block_title FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
+    $tb_added_data = db_fetch_object($tb_added_result);
+    $omit_tids = explode(',', $tb_added_result->omit_tids);
+    $open_tids = explode(',', $tb_added_result->open_tids);
+    $maintitle_def = $tb_added_result->block_title;
+
     $content_types = array();
     $content_types['all'] = t('All Content Types');
 
@@ -261,10 +256,9 @@ function taxonomy_blocks_config() {
       '#title' => 'Main Title for block',
       '#default_value' => $maintitle_def,
     );
-    $optionsresult = db_query("SELECT type FROM {vocabulary_node_types} WHERE vid = %d", $vocab->vid);
+    $optionsresult = db_query("SELECT vnt.type, nt.name FROM {vocabulary_node_types} vnt LEFT JOIN {node_type} nt ON vnt.type = nt.type WHERE vid = %d", $vocab->vid);
     while ($enabled = db_fetch_object($optionsresult)) {
-      $type_readable = db_result(db_query("SELECT name from {node_type} WHERE type = '%s'", $enabled->type));
-      $content_types[$enabled->type] = $type_readable;
+      $content_types[$enabled->type] = $enabled->name;
     }
     $content_types['none'] = t("Don't show node count");
 
