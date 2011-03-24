@@ -172,6 +172,20 @@ function taxonomy_blocks_config() {
     '#description' => t('Omitted terms will only be hidden from this block. These settings have no affect on the actual taxonomies.'),
   );
   $additional = variable_get('tb_additional', 0);
+
+  // If Content Taxonomy is enabled, any node type can have terms from any
+  // vocabulary through a CCK field, so load all options.
+  if(module_enabled('content_taxonomy')){
+    $content_types = array();
+    $content_types['all'] = t('All Content Types');
+
+    $optionsresult = db_query('SELECT type, name FROM {node_type}');
+    while ($contenttype = db_fetch_object($optionsresult)) {
+      $content_types[$contenttype->type] = $contenttype->name;
+    }
+    $content_types['none'] = t("Don't show node count");
+  }
+
   while ($vocab = db_fetch_object($result)) {
     $vocab_array[] = $vocab->vid;
     //Check if vocab has been altered before checking specific defaults.
@@ -248,8 +262,6 @@ function taxonomy_blocks_config() {
     $tb_id_open_def = db_result(db_query("SELECT open_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
     $open_tids = explode(',', $tb_id_open_def);
     $maintitle_def = db_result(db_query("SELECT block_title FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
-    $content_types = array();
-    $content_types['all'] = t('All Content Types');
 
     if (is_array($additional)) {
       $children_def = $additional[$tb_id][$vocab->vid]['children_count'];
@@ -261,12 +273,21 @@ function taxonomy_blocks_config() {
       '#title' => 'Main Title for block',
       '#default_value' => $maintitle_def,
     );
-    $optionsresult = db_query("SELECT type FROM {vocabulary_node_types} WHERE vid = %d", $vocab->vid);
-    while ($enabled = db_fetch_object($optionsresult)) {
-      $type_readable = db_result(db_query("SELECT name from {node_type} WHERE type = '%s'", $enabled->type));
-      $content_types[$enabled->type] = $type_readable;
+
+    // Limit the Content Types available for term counts to those which
+    // the current vocabulary is enabled for.
+    if(!module_enabled('content_taxonomy')){
+      $content_types = array();
+      $content_types['all'] = t('All Content Types');
+      $optionsresult = db_query("SELECT vnt.type, nt.name FROM {vocabulary_node_types} vnt LEFT JOIN {node_type} nt ON vnt.type = nt.type WHERE vid = %d", $vocab->vid);
+
+      // TODO If Content Taxonomy is enabled, check the node type for CCK fields
+      // which can reference the current vocabulary.
+      while ($enabled = db_fetch_object($optionsresult)) {
+        $content_types[$enabled->type] = $enabled->name;
+      }
+      $content_types['none'] = t("Don't show node count");
     }
-    $content_types['none'] = t("Don't show node count");
 
     $form['tb_config_form']['vocab'][$vocab->vid] = array (
       '#type' => 'fieldset',
