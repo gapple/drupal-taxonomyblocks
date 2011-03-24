@@ -41,7 +41,7 @@ function taxonomyblocks_schema() {
           'not null'      => FALSE,
         ),
       ),
-      'primary key' => array('tb_id'),  
+      'primary key' => array('tb_id'),
   );
   $schema['tb_customized'] = array(
     'description'   => t('Stores customization information'),
