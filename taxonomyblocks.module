@@ -561,14 +561,16 @@ function taxonomyblocks_block($op = 'list', $delta = 0, $edit = array()) {
 function theme_multi_taxonomyblock($tb_id = 0) {
   if (arg(0) == 'node' && is_numeric(arg(1))) {
     $nid = arg(1);
-    $nodeuid = db_result(db_query("SELECT uid FROM {node} WHERE nid = %d", $nid));
-    $nodetype = db_result(db_query("SELECT type FROM {node} WHERE nid = %d", $nid));
+    $node = node_load($nid);
+    $nodeuid = $node->uid;
+    $nodetype = $node->type;
   }
   global $user;
   if ($user->uid) {
     $useruid = $user->uid;
   }
-  $ismodified = db_result(db_query("SELECT custom FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
+  $tb_added_result = db_fetch_object(db_query("SELECT custom, omit_tids, open_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
+  $ismodified = $tb_added_result->custom;
   if ($ismodified == 0) {
     if ($tb_id != 1) {
       $result = db_query("SELECT vid FROM {vocabulary} WHERE name <> 'Forums' ");
@@ -580,9 +582,9 @@ function theme_multi_taxonomyblock($tb_id = 0) {
     }
 
   }
-  if ($ismodified == 1) {
+  else if ($ismodified == 1) {
     $result = db_query("SELECT vid FROM {tb_customized} WHERE tb_id = %d AND enabled = 1 ORDER BY weight ASC", $tb_id);
-    $omit = db_result(db_query("SELECT omit_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
+    $omit = $tb_added_result->omit_tids;
 
     if (!empty($omit)) {
       $omit = explode(',', $omit);
@@ -590,7 +592,7 @@ function theme_multi_taxonomyblock($tb_id = 0) {
     else {
       $omit = array();
     }
-    $open = db_result(db_query("SELECT open_tids FROM {tb_added_list} WHERE tb_id = %d", $tb_id));
+    $open = $tb_added_result->open_tids;
     $open = explode(',', $open);
   }
   while ($vocabs = db_fetch_object($result)) {
@@ -598,7 +600,7 @@ function theme_multi_taxonomyblock($tb_id = 0) {
   }
   if (!empty($pre_vocab_list)) {
     foreach ($pre_vocab_list as $vid) {
-      $hasterms = db_result(db_query("SELECT tid FROM {term_data} WHERE vid = %d", $vid));
+      $hasterms = db_result(db_query("SELECT tid FROM {term_data} WHERE vid = %d LIMIT 1", $vid));
       if (!empty($hasterms)) {
         $toplevel = taxonomy_get_toplevel($vid);
         $nodecounter = db_result(db_query("SELECT counter FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
@@ -632,15 +634,17 @@ function theme_multi_taxonomyblock($tb_id = 0) {
           $nodecounter  = 'all';
           $titlepattern = 'Content tagged with @termname';
         }
-        if ($ismodified == 0 && $tb_id == 1) {
+        else if ($ismodified == 0 && $tb_id == 1) {
           $pathpattern  = 'forum/%tid';
           $nodecounter  = 'forum';
           $titlepattern = 'Forums categorized as %tid';
         }
-        if ($ismodified == 1) {
-          $pathpattern = db_result(db_query("SELECT path_pattern FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
-          $nodecounter = db_result(db_query("SELECT counter FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
-          $titlepattern = db_result(db_query("SELECT title_pattern FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
+        else if ($ismodified == 1) {
+          $customized_result = db_fetch_object(db_query("SELECT path_pattern, counter, title_pattern, custom_title FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
+          $pathpattern = $customized_result->path_pattern;
+          $nodecounter = $customized_result->counter;
+          $titlepattern = $customized_result->title_pattern;
+          $vocabname = $customized_result->custom_title;
         }
 
         $additional = variable_get('tb_additional', 0);
@@ -675,9 +679,6 @@ function theme_multi_taxonomyblock($tb_id = 0) {
           if ($ismodified == 0) {
             $vocabname = db_result(db_query("SELECT name FROM {vocabulary} WHERE vid = %d", $vid));
           }
-          if ($ismodified != 0) {
-            $vocabname = db_result(db_query("SELECT custom_title FROM {tb_customized} WHERE tb_id = %d AND vid = %d", $tb_id, $vid));
-          }
 
           if (($vocabname != '<none>') && !empty($menu)) {
             if (function_exists('tt')) {
@@ -700,14 +701,16 @@ function theme_multi_taxonomyblock($tb_id = 0) {
 function theme_forum_taxonomyblock() {
   if (arg(0) == 'node' && is_numeric(arg(1))) {
     $nid = arg(1);
-    $nodeuid = db_result(db_query("SELECT uid FROM {node} WHERE nid = %d", $nid));
-    $nodetype = db_result(db_query("SELECT type FROM {node} WHERE nid = %d", $nid));
+    $node = node_load($nid);
+    $nodeuid = $node->uid;
+    $nodetype = $node->type;
   }
   global $user;
   if ($user->uid) {
     $useruid = $user->uid;
   }
-  $ismodified = db_result(db_query("SELECT custom FROM {tb_added_list} WHERE tb_id = 1"));
+  $tb_added_result = db_fetch_object(db_query("SELECT custom, omit_tids, open_tids FROM {tb_added_list} WHERE tb_id = 1"));
+  $ismodified = $tb_added_list->custom;
   if ($ismodified == 0) {
     $pathpattern = 'forum/%tid';
     $nodecounter = 'forum';
@@ -720,14 +723,15 @@ function theme_forum_taxonomyblock() {
       $titlepattern = $forum->title_pattern;
       $nodecounter  = $forum->counter;
     }
-    $omit = db_result(db_query("SELECT omit_tids FROM {tb_added_list} WHERE tb_id = 1"));
+
+    $omit = $tb_added_result->omit_tids;
     if (!empty($omit)) {
       $omit = explode(',', $omit);
     }
     else {
       $omit = array();
     }
-    $open = db_result(db_query("SELECT open_tids FROM {tb_added_list} WHERE tb_id = 1"));
+    $open = $tb_added_result->open_tids;
     $open = explode(',', $open);
   }
 
