@@ -781,52 +781,64 @@ function term_has_parent($tid) {
   return $hasparent;
 }
 
- function taxonomy_get_toplevel($vid) {
-  //Check to insure that the vid has terms.
-  $result = db_query("SELECT tid FROM {term_data} WHERE vid = %d ORDER BY weight,name ASC", $vid);
+/**
+ * Retrieve a list of the top level terms in a vocabulary.
+ *
+ * @param $vid
+ * @return
+ *   An array of term ids
+ */
+function taxonomy_get_toplevel($vid) {
+  $result = db_query("SELECT tid FROM {term_data} td JOIN {term_hierarchy} th ON td.tid = th.tid WHERE vid = %d AND parent = 0 ORDER BY weight,name ASC", $vid);
 
   while ($term = db_fetch_object($result)) {
-    $hasparent = term_has_parent($term->tid);
-    if ($hasparent == 0) {
-    //Instead of counting here we will put this off till the creation of final array.
       $toplevel_array[] = $term->tid;
-    }
   }
   return $toplevel_array;
 }
+/**
+ * Retrieve a list of a term's children, ordered by weight
+ *
+ * @param $parent_tid
+ * @return
+ *   An array of term ids
+ */
 function get_one_level_children($parent_tid) {
   $result = db_query("SELECT th.tid FROM {term_hierarchy} th, {term_data} td WHERE th.parent = %d AND td.tid = th.tid ORDER BY td.weight,td.name ASC", $parent_tid);
   while ($term = db_fetch_object($result)) {
-    $children[]   = $term->tid;
+    $children[] = $term->tid;
   }
   return $children;
 }
-function get_all_children($parent_tid, $prev = NULL) {
-  $level = '';
-  $level = get_one_level_children($parent_tid);
+/**
+ * Retrieve a list of a term's descendents
+ *
+ * @param $parent_tid
+ * @return
+ *   An array of term ids
+ */
+function get_all_children($parent_tid) {
 
-  if (!empty($level) && $prev != NULL) {
-    $children = array_merge($level, $prev);
-  }
-  if (!empty($level) && $prev == NULL) {
-      $children = $level;
-  }
-  if (empty($level) && $prev != NULL) {
-    $children = $prev;
-  }
+  $children = array();
+  $unprocessed = array($parent_tid);
 
-  if (!empty($level)) {
-    foreach ($level as $ctid) {
-      $next = array();
-      $next = get_all_children($ctid, $children);
-      if (!empty($next)) {
-        $children = array_merge($next, $children);
-      }
+  while ($unprocessed) {
+    $result = db_query(
+      "SELECT th.tid FROM {term_hierarchy} th WHERE th.parent IN(%s)",
+      implode(',',$unprocessed)
+    );
+
+    // Build the unprocessed list for the next iteration.
+    $unprocessed = array();
+    while ($term = db_fetch_object($result)) {
+      $unprocessed[] = $term->tid;
     }
+    // Don't re-process terms.
+    $unprocessed = array_diff($unprocessed, $children);
+
+    $children = array_merge($children, $unprocessed);
   }
-  if (is_array($children)) {
-    $children = array_unique($children);
-  }
+
   return $children;
 }
 /**
